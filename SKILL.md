@@ -1,8 +1,7 @@
 ---
 name: afk-issue-loop
-description: "Autonomous rinse-and-repeat loop: process GitHub issues end-to-end (triage unlabeled issues, implement ready-for-agent issues, PR, watch CI, fix until green, squash-merge, sync main). One subagent at a time, cost-minimal. Use when the user asks to run the issue loop, process open issues AFK, or rinse-and-repeat the issue/PR cycle."
-disable-model-invocation: true
-argument-hint: "[issue numbers or filter, default: all actionable open issues]"
+description: "Autonomous rinse-and-repeat loop: process GitHub issues end-to-end (triage unlabeled issues, implement ready-for-agent issues, PR, watch CI, fix until green, squash-merge, sync main). One subagent at a time, cost-minimal."
+argument: "[issue numbers or filter, default: all actionable open issues]"
 ---
 
 # AFK Issue Loop

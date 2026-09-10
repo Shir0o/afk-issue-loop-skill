@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: The skill did something unexpected or wrong
+about: The agent did something unexpected or wrong while running the issue loop
 labels: needs-triage
 ---
 
@@ -16,7 +16,7 @@ labels: needs-triage
 
 **Environment**
 
-- Antigravity version (`agy --version`):
+- AI coding agent used (e.g. Claude Code, Cursor, Copilot Workspace, etc.):
 - Dependency skills installed: triage / implement / tdd / code-review (check all that apply)
 - Repo type (public GitHub / private GitHub / other):
 
