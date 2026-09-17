@@ -24,13 +24,13 @@ Open a [GitHub Issue](https://github.com/Shir0o/afk-issue-loop-skill/issues). Pl
 
 ### What makes a good change
 
-- **Tighter constraints** — the hard rules (no concurrent tasks, no direct push to `main`, ≤3 fix cycles) exist to keep costs low and outcomes predictable. Changes that weaken them need a very strong justification.
+- **Tighter constraints** — the hard rules (isolated worktrees per worker, no direct push to `main`, sequential main merges, ≤3 fix cycles) exist to keep outcomes predictable and avoid conflicts. Changes that weaken them need a very strong justification.
 - **Better prompts** — the subagent prompt template is the core of the skill. Improvements that make agent outputs more reliable or predictable are very welcome.
 - **Clearer phase boundaries** — the three-phase structure (ground profile → dispatch → wrap-up) should stay legible and easy for future maintainers to reason about.
 
 ### What's out of scope
 
-- Concurrent task execution (violates the serial constraint)
+- Uncoordinated or conflicting concurrent writes to the same branch/worktree
 - Support for non-GitHub issue trackers (use Matt Pocock's `triage` skill config for that)
 - Features unrelated to the issue → PR → merge lifecycle
 

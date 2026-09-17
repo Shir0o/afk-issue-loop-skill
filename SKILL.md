@@ -1,26 +1,34 @@
 ---
 name: afk-issue-loop
-description: "Autonomous rinse-and-repeat loop: process GitHub issues end-to-end (triage unlabeled issues, implement ready-for-agent issues, PR, watch CI, fix until green, squash-merge, sync main). One subagent at a time, cost-minimal."
-argument: "[issue numbers or filter, default: all actionable open issues]"
+description: "Autonomous rinse-and-repeat loop: process GitHub issues end-to-end (triage unlabeled issues, implement ready-for-agent issues, PR, watch CI, fix until green, squash-merge, sync main). Configurable serial or parallel agents, cost-minimal."
+argument: "[issue numbers or filter, e.g. --parallel or --concurrency N; default: all actionable open issues]"
 ---
 
 # AFK Issue Loop
 
 Autonomous loop over GitHub issues for the current repo. One issue per subagent;
-strictly serial; GitHub is the only durable state.
+serial by default or parallel upon user confirmation; GitHub is the only durable state.
 
 ## Operating principles (hard rules)
 
-1. **Automation, not concurrency.** At most ONE working subagent at any moment.
-   Spawn the next only after the previous settles and its PR is merged (or blocked).
+1. **User-selected concurrency.** Before dispatching, ask the user whether to run
+   serially (1 agent at a time, cost-minimal) or in parallel (specifying maximum
+   concurrency $N$, e.g. 2–3 agents). If arguments specify `--parallel` or
+   `--concurrency <N>`, honor that without re-asking.
+   - In serial mode: at most ONE working subagent at any moment. Spawn the next only
+     after the previous settles.
+   - In parallel mode: spawn up to $N$ subagents concurrently for independent issues.
+     Each subagent MUST operate in its own isolated git worktree/branch.
 2. **Cost-minimal bookkeeping.** The orchestrator does cheap `gh` operations inline
    (closing duplicates, labels, comments, epic closure). Subagents are only for
    issue-sized work (triage analysis, implementation). Never spawn a subagent for a
    one-command change.
 3. **Dependency order.** Within a family of related issues (spec + decomposition
    tickets, ADR chains), implement in dependency order: prerequisites first. Close
-   parent/epic issues only after their chain merges. Independent issues last.
-4. **Never push to `main` directly.** Everything lands via PR + checks.
+   parent/epic issues only after their chain merges. Independent issues can be
+   dispatched concurrently up to the concurrency limit.
+4. **Never push to `main` directly.** Everything lands via PR + checks. Merges to
+   `main` are performed sequentially by the orchestrator.
 5. **Honesty over completion.** Blocked (flaky CI >3 attempts, missing credentials,
    genuinely ambiguous spec) → stop that issue, report `blocked`, move on. Never
    fake a merge or a triage outcome.
@@ -56,12 +64,19 @@ Gather and hold these facts; they parameterize every subagent prompt:
   3. everything else (`needs-info`, `ready-for-human` — skip; report only).
 - **Duplicates**: same title/body/author within seconds apart → close the emptier
   one as duplicate of the fuller one, inline, label `wontfix`, comment links both.
+- **Execution mode (Ask user)**: If arguments do not specify (`--parallel`, `--serial`,
+  or `--concurrency <N>`), ask the user:
+  > "Do you want to run issues in serial (1 agent at a time, cost-minimal) or in parallel (specify concurrency limit, e.g. 2 or 3)?"
+  Record the selected mode (`serial` or `parallel`) and concurrency limit $N$ (default to 2 if parallel is chosen without a number).
 
-## Phase 1 — Per-issue dispatch
+## Phase 1 — Issue dispatch (serial or parallel)
 
-For each queued issue, in order, spawn ONE subagent with the template below.
-While it runs, the orchestrator does nothing else agent-wise; you may answer user
-questions and do inline `gh` bookkeeping.
+Depending on the chosen execution mode:
+- **Serial mode**: For each queued issue in order, spawn ONE subagent with the template below.
+  While it runs, do inline `gh` bookkeeping only. Spawn the next only after the current settles.
+- **Parallel mode**: Identify independent issues in the queue (no unmet dependency relationships).
+  Spawn up to $N$ subagents concurrently. Each subagent MUST have its own isolated git worktree
+  (e.g., `.worktrees/issue-<N>`) or branch to prevent collision.
 
 Branch on labels:
 - **Has `ready-for-agent`** → Branch A (implement).
@@ -78,8 +93,8 @@ required-check names, and the merge method — it has no conversation history.
 Process GitHub issue <N> of <OWNER>/<REPO> through the AFK issue loop.
 
 # Constraints
-- Shared git worktree at <PATH>. You <OWN | DO NOT TOUCH> git HEAD
-  (OWN for implement; DO NOT TOUCH for triage).
+- Git worktree / branch at <PATH>. You <OWN | DO NOT TOUCH> git HEAD
+  (OWN for implement; DO NOT TOUCH for triage). In parallel mode, work only in your isolated worktree.
 - Follow the standing SOP: execute skill://afk-issue-loop, Branch <A|B>, for
   issue <N> only. Skills: skill://triage (+ skill://triage/AGENT-BRIEF.md),
   skill://implement, skill://tdd, skill://code-review — read what your branch needs.
@@ -128,7 +143,10 @@ Process GitHub issue <N> of <OWNER>/<REPO> through the AFK issue loop.
    not commit or discard them — `git stash push -m "<descriptive note>"` before any
    sync, and tell the user what was stashed and why.
 5. Mark the issue done; if it unblocked dependents, reorder the queue.
-6. Spawn the next subagent. Repeat until the queue is empty.
+6. Dispatch the next subagent(s):
+   - In serial mode: spawn the next single subagent.
+   - In parallel mode: maintain up to $N$ active agents by dispatching the next available independent issue.
+   Repeat until the queue is empty.
 
 ## Phase 3 — Wrap-up
 

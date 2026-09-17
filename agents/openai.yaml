@@ -1,0 +1,5 @@
+interface:
+  display_name: "AFK Issue Loop"
+  short_description: "Autonomous rinse-and-repeat loop over GitHub issues: triage, implement, PR, merge."
+policy:
+  allow_implicit_invocation: false

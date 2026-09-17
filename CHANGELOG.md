@@ -6,7 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-09-10
+### Added
+- User prompt in Phase 0 to choose serial execution (1 agent, cost-minimal) or parallel execution ($N$ agents across isolated worktrees)
+- Support for CLI arguments to set concurrency limit (`--parallel`, `--concurrency <N>`)
+- Parallel dispatch logic for independent issues with isolated worktrees and sequential orchestrator merges
 
 ### Added
 - Initial release of `afk-issue-loop` skill

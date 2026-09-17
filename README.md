@@ -1,6 +1,6 @@
 # afk-issue-loop
 
-> An autonomous, cost-minimal GitHub issue loop for AI coding agents — triage unlabeled issues, implement `ready-for-agent` issues, open PRs, watch CI, fix until green, and squash-merge. One subagent at a time. No human babysitting required.
+> An autonomous, cost-minimal GitHub issue loop for AI coding agents — triage unlabeled issues, implement `ready-for-agent` issues, open PRs, watch CI, fix until green, and squash-merge. Run serially or spawn parallel agents. No human babysitting required.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -10,7 +10,7 @@
 
 - **Triage** — labels unlabeled issues (`needs-triage → needs-info / ready-for-agent / wontfix`), closes exact duplicates inline.
 - **Implement** — branches off `main`, writes code TDD-style, opens a PR, watches CI, fixes failures (up to 3 cycles), then merges or hands off to the orchestrator.
-- **Orchestrate** — runs issues serially in dependency order. GitHub labels, comments, and PRs are the only durable state — no local bookkeeping file.
+- **Orchestrate** — asks whether to run serially (1 subagent at a time) or in parallel ($N$ concurrent workers for independent issues). GitHub labels, comments, and PRs are the only durable state — no local bookkeeping file.
 
 ## How it works
 
@@ -19,15 +19,16 @@
 ```
 Orchestrator (the agent)
   │
-  ├─ Phase 0: ground repo profile
+  ├─ Phase 0: ground repo profile & ask execution mode
   │    gh repo view, .github/workflows, merge policy, open issue queue
+  │    prompt user: serial (1 agent) or parallel (N concurrent agents)
   │
-  ├─ Phase 1: per-issue dispatch (serial, one sub-task at a time)
+  ├─ Phase 1: issue dispatch (serial or parallel across worktrees)
   │    ├─ unlabeled / needs-triage  →  triage workflow (Branch B)
   │    └─ ready-for-agent          →  implement + tdd + code-review (Branch A)
   │
   ├─ Phase 2: after each task settles
-  │    verify gh claim → merge (squash) → sync main → next issue
+  │    verify gh claim → merge (squash) → sync main → dispatch next issue(s)
   │
   └─ Phase 3: wrap-up
        close epics, report table of outcomes
@@ -93,7 +94,14 @@ run the issue loop
 process open issues AFK
 ```
 
-The agent reads `SKILL.md`, grounds the repo profile (merge policy, required CI checks, label config), then works through the queue serially until it's empty.
+The agent reads `SKILL.md`, grounds the repo profile (merge policy, required CI checks, label config), asks if you prefer serial execution (1 agent, cost-minimal) or parallel execution ($N$ agents across isolated worktrees), and then works through the queue until it's empty.
+
+You can also specify parallel execution directly:
+
+```
+run the issue loop in parallel
+run the issue loop with 3 parallel agents
+```
 
 Target specific issues:
 
