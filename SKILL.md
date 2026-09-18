@@ -23,18 +23,32 @@ serial by default or parallel upon user confirmation; GitHub is the only durable
    (closing duplicates, labels, comments, epic closure). Subagents are only for
    issue-sized work (triage analysis, implementation). Never spawn a subagent for a
    one-command change.
-3. **Dependency order.** Within a family of related issues (spec + decomposition
-   tickets, ADR chains), implement in dependency order: prerequisites first. Close
-   parent/epic issues only after their chain merges. Independent issues can be
-   dispatched concurrently up to the concurrency limit.
+3. **Conflict-minimizing sequence & dependency order.**
+   - Within a family of related issues (spec + decomposition tickets, ADR chains),
+     strictly implement in dependency order: prerequisites first. Close parent/epic
+     issues only after their chain merges.
+   - When selecting issues for parallel dispatch, optimize to prevent merge conflicts
+     and avoid costly rebases: partition concurrent issues by disjoint files, modules,
+     or directory subsystems (e.g. backend vs frontend, separate packages, independent
+     endpoints). Never dispatch issues concurrently if they touch or are expected to
+     modify overlapping files or shared schemas.
 4. **Never push to `main` directly.** Everything lands via PR + checks. Merges to
    `main` are performed sequentially by the orchestrator.
 5. **Honesty over completion.** Blocked (flaky CI >3 attempts, missing credentials,
    genuinely ambiguous spec) → stop that issue, report `blocked`, move on. Never
    fake a merge or a triage outcome.
-6. **Ephemeral agents.** Each subagent gets a complete, self-contained prompt (see
-   template below) and returns a short report. Its transcript is discarded — all
-   durable state lives on GitHub (labels, comments, PRs).
+6. **Resumption over restart (interruption resilience).** While subagents are
+   ephemeral during uninterrupted runs, if the orchestrator or subagent is interrupted
+   and resumed later (due to connection drops, process restarts, or user termination),
+   the orchestrator MUST NOT start anew or discard ongoing work. Instead:
+   - Inspect chat/session history, existing worktrees (`.worktrees/issue-*`), active branches
+     (`agent/issue-*`), and open PRs.
+   - Dispatch subagents with a resume prompt referencing the existing worktree, unstaged/committed
+     changes, and remaining goals.
+   - Rebuilding from scratch is a last-resort fallback only if an in-flight worktree is
+     unrecoverably corrupt.
+7. **Ephemeral baseline.** Completed subagent transcripts are discarded once settled —
+   all durable state lives on GitHub (labels, comments, PRs).
 
 ## Phase 0 — Ground the repo profile (orchestrator, inline, once per run)
 
@@ -58,10 +72,19 @@ Gather and hold these facts; they parameterize every subagent prompt:
 - **Install state**: if `node_modules` is missing, run the install (`npm ci` or
   equivalent) in the background BEFORE the first implement agent — don't make
   agents race on it.
+- **In-flight / Interruption scan**: Check whether the loop was interrupted previously
+  (process kill, connection drop, timeout):
+  1. Inspect existing worktrees (`.worktrees/issue-*` or `git worktree list`).
+  2. Inspect local and remote branches (`git branch -a | grep 'agent/issue-'`).
+  3. Inspect open PRs created by the loop (`gh pr list --head 'agent/issue-'`).
+  4. Inspect recent chat / agent session history or subagent logs to determine the last
+     active issue and progress.
+  Any issue found in-flight is marked for **Resumption** in Phase 1 rather than fresh dispatch.
 - **Queue**: `gh issue list --state open` → order:
-  1. unlabeled (triage) and `needs-triage` issues,
-  2. `ready-for-agent` issues (dependency order within families),
-  3. everything else (`needs-info`, `ready-for-human` — skip; report only).
+  1. In-flight / interrupted issues (resume existing work first),
+  2. unlabeled (triage) and `needs-triage` issues,
+  3. `ready-for-agent` issues (dependency order within families, then conflict-minimized grouping),
+  4. everything else (`needs-info`, `ready-for-human` — skip; report only).
 - **Duplicates**: same title/body/author within seconds apart → close the emptier
   one as duplicate of the fuller one, inline, label `wontfix`, comment links both.
 - **Execution mode (Ask user)**: If arguments do not specify (`--parallel`, `--serial`,
@@ -72,21 +95,32 @@ Gather and hold these facts; they parameterize every subagent prompt:
 ## Phase 1 — Issue dispatch (serial or parallel)
 
 Depending on the chosen execution mode:
-- **Serial mode**: For each queued issue in order, spawn ONE subagent with the template below.
-  While it runs, do inline `gh` bookkeeping only. Spawn the next only after the current settles.
-- **Parallel mode**: Identify independent issues in the queue (no unmet dependency relationships).
-  Spawn up to $N$ subagents concurrently. Each subagent MUST have its own isolated git worktree
-  (e.g., `.worktrees/issue-<N>`) or branch to prevent collision.
+- **Serial mode**: For each queued issue in order, spawn ONE subagent with the appropriate
+  template below (Fresh or Resume). While it runs, do inline `gh` bookkeeping only. Spawn the next only after the current settles.
+- **Parallel mode (Conflict-Minimizing Issue Selection)**:
+  Identify independent issues in the queue (no unmet dependencies). To minimize cost,
+  prevent git merge conflicts, and avoid wasted CI/fix cycles:
+  1. **Disjoint Subsystems**: Group candidates by domain / directory / module (e.g. backend vs
+     frontend, distinct API routes, separate config/doc files). Select issues that touch
+     mutually exclusive file sets.
+  2. **Never Concurrently Dispatch Overlapping Changes**: If two issues require changes to
+     the same files, shared models, or schema definitions, execute them in sequence, not in
+     parallel.
+  3. **Strict Sequencing**: For dependent or related issues, merge prerequisites first so subsequent
+     agents branch off updated code cleanly.
+  Spawn up to $N$ subagents concurrently across isolated git worktrees (e.g., `.worktrees/issue-<N>`).
 
 Branch on labels:
 - **Has `ready-for-agent`** → Branch A (implement).
 - **Unlabeled / `needs-triage`** → Branch B (triage only).
 - **`needs-info`, `ready-for-human`, `wontfix`** → skip.
 
-### Subagent prompt template
+### Subagent prompt templates
 
 Fill `<...>` from the repo profile. Give the subagent the repo docs list, the
 required-check names, and the merge method — it has no conversation history.
+
+#### 1. Fresh dispatch prompt
 
 ```
 # Goal
@@ -121,6 +155,34 @@ Process GitHub issue <N> of <OWNER>/<REPO> through the AFK issue loop.
   Notes: <1–3 lines>
 ```
 
+#### 2. Resume dispatch prompt (when resuming interrupted work)
+
+```
+# Goal
+RESUME GitHub issue <N> of <OWNER>/<REPO> through the AFK issue loop.
+An earlier subagent was interrupted. Do NOT wipe the branch or restart from scratch.
+
+# Worktree & Context State
+- Existing worktree: <PATH> on branch `agent/issue-<N>`.
+- Prior progress status:
+  - Local commits: <SUMMARY OF COMMITS ON BRANCH>
+  - Uncommitted changes / files: <GIT STATUS / DIFF SUMMARY>
+  - PR status: <PR #x OPEN / CHECKS STATUS / NONE>
+  - Interruption point from session history: <LAST KNOWN ACTION / MILESTONE>
+
+# Constraints
+- Work directly inside existing worktree <PATH>. Continue from the current state of files.
+- Inspect the current code and test suite before making changes.
+- If existing work is valid, build upon it: complete remaining implementation/tests, ensure the full gate passes, and push.
+- If a PR already exists, push fixes to the existing branch; do not open a duplicate PR.
+- If the worktree is in an unrecoverable state (corrupt rebase or syntax deadlock), run `git reset --hard` to the last clean commit or `origin/main` as a one-time fallback, and state that in the final report.
+- Follow the standing SOP: execute skill://afk-issue-loop, Branch <A|B>, for issue <N> only.
+- Full gate before push: <COMMANDS from AGENTS.md/CI, e.g. typecheck && lint && test:coverage && build>.
+- Final message, exactly:
+  ISSUE <N>: <merged (PR #x) | pushed (PR #x, checks green) | triaged (label) | closed (wontfix) | blocked>
+  Notes: <1–3 lines>
+```
+
 ### Orchestrator-side prompts during a run
 
 - User answers to triage questions are relayed to a running agent via hub DM; once
@@ -135,17 +197,18 @@ Process GitHub issue <N> of <OWNER>/<REPO> through the AFK issue loop.
    ruleset demands an approval), verify the issue auto-closed, and sync main —
    `git pull --ff-only` in the checkout that has `main` (a worktree cannot fetch
    into a branch checked out elsewhere).
-3. If the agent died mid-flight (`failed`), inspect the worktree before
-   re-dispatching: uncommitted work is recovered by the next agent prompt (list
-   exactly what exists and what remains); a clean tree means fresh dispatch. Never
-   re-dispatch blind onto a dirty tree.
+3. If the agent died mid-flight (`failed` or process interrupted):
+   - Inspect the worktree (`git status`, `git diff`, `git log -n 3`) and session logs.
+   - If uncommitted or partially finished work exists, do not discard it. Dispatch a
+     subagent using the **Resume dispatch prompt** with the recovered diff context.
+   - Only if the tree is completely empty or cleanly aborted should a fresh dispatch be used.
 4. If the user's primary checkout (`~/<repo>`) has staged/uncommitted changes, do
    not commit or discard them — `git stash push -m "<descriptive note>"` before any
    sync, and tell the user what was stashed and why.
 5. Mark the issue done; if it unblocked dependents, reorder the queue.
 6. Dispatch the next subagent(s):
    - In serial mode: spawn the next single subagent.
-   - In parallel mode: maintain up to $N$ active agents by dispatching the next available independent issue.
+   - In parallel mode: maintain up to $N$ active agents by dispatching the next available independent issue (following conflict-minimizing partitioning).
    Repeat until the queue is empty.
 
 ## Phase 3 — Wrap-up

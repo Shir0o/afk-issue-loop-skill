@@ -10,7 +10,8 @@
 
 - **Triage** — labels unlabeled issues (`needs-triage → needs-info / ready-for-agent / wontfix`), closes exact duplicates inline.
 - **Implement** — branches off `main`, writes code TDD-style, opens a PR, watches CI, fixes failures (up to 3 cycles), then merges or hands off to the orchestrator.
-- **Orchestrate** — asks whether to run serially (1 subagent at a time) or in parallel ($N$ concurrent workers for independent issues). GitHub labels, comments, and PRs are the only durable state — no local bookkeeping file.
+- **Orchestrate** — runs serially (1 subagent at a time) or in parallel ($N$ concurrent workers for independent issues, partitioned to prevent merge conflicts).
+- **Interruption Resilience** — resumes in-flight subagents by inspecting session history and worktree diffs rather than starting from scratch after network drops or process stops.
 
 ## How it works
 
@@ -19,12 +20,13 @@
 ```
 Orchestrator (the agent)
   │
-  ├─ Phase 0: ground repo profile & ask execution mode
-  │    gh repo view, .github/workflows, merge policy, open issue queue
+  ├─ Phase 0: ground repo profile, scan in-flight work, & ask execution mode
+  │    gh repo view, check existing worktrees/branches/PRs, open issue queue
   │    prompt user: serial (1 agent) or parallel (N concurrent agents)
   │
-  ├─ Phase 1: issue dispatch (serial or parallel across worktrees)
-  │    ├─ unlabeled / needs-triage  →  triage workflow (Branch B)
+  ├─ Phase 1: issue dispatch (serial or conflict-minimized parallel across worktrees)
+  │    ├─ interrupted in-flight   →  resume with worktree diff context
+  │    ├─ unlabeled / needs-triage →  triage workflow (Branch B)
   │    └─ ready-for-agent          →  implement + tdd + code-review (Branch A)
   │
   ├─ Phase 2: after each task settles
