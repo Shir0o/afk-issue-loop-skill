@@ -11,11 +11,12 @@ serial by default or parallel upon user confirmation; GitHub is the only durable
 
 ## Operating principles (hard rules)
 
-1. **User-selected concurrency.** Before dispatching, ask the user whether to run
-   serially (1 agent at a time, cost-minimal) or in parallel (specifying maximum
-   concurrency $N$, e.g. 2–3 agents). If arguments specify `--parallel` or
-   `--concurrency <N>`, honor that without re-asking.
-   - In serial mode: at most ONE working subagent at any moment. Spawn the next only
+1. **User-selected concurrency (default sequential).** Before dispatching, ask
+   the user whether to run sequentially (1 agent at a time, cost-minimal; default)
+   or in parallel (specifying maximum concurrency $N$, e.g. 2–3 agents). If arguments
+   specify `--parallel`, `--concurrency <N>`, or `--sequential`/`--serial`, honor
+   that without re-asking.
+   - In sequential/serial mode: at most ONE working subagent at any moment. Spawn the next only
      after the previous settles.
    - In parallel mode: spawn up to $N$ subagents concurrently for independent issues.
      Each subagent MUST operate in its own isolated git worktree/branch.
@@ -87,15 +88,16 @@ Gather and hold these facts; they parameterize every subagent prompt:
   4. everything else (`needs-info`, `ready-for-human` — skip; report only).
 - **Duplicates**: same title/body/author within seconds apart → close the emptier
   one as duplicate of the fuller one, inline, label `wontfix`, comment links both.
-- **Execution mode (Ask user)**: If arguments do not specify (`--parallel`, `--serial`,
-  or `--concurrency <N>`), ask the user:
-  > "Do you want to run issues in serial (1 agent at a time, cost-minimal) or in parallel (specify concurrency limit, e.g. 2 or 3)?"
-  Record the selected mode (`serial` or `parallel`) and concurrency limit $N$ (default to 2 if parallel is chosen without a number).
+- **Execution mode (Ask user, default sequential)**: If arguments do not specify
+  (`--parallel`, `--serial`, `--sequential`, or `--concurrency <N>`), ask the user:
+  > "Do you want to run issues sequentially (1 agent at a time, cost-minimal; default) or in parallel (specify concurrency limit, e.g. 2 or 3)?"
+  If the user does not specify a preference or chooses default, use `sequential`. If parallel is chosen without a number, default concurrency limit $N$ to 2.
+  Record the selected mode (`sequential` or `parallel`) and concurrency limit $N$.
 
-## Phase 1 — Issue dispatch (serial or parallel)
+## Phase 1 — Issue dispatch (sequential or parallel)
 
 Depending on the chosen execution mode:
-- **Serial mode**: For each queued issue in order, spawn ONE subagent with the appropriate
+- **Sequential mode**: For each queued issue in order, spawn ONE subagent with the appropriate
   template below (Fresh or Resume). While it runs, do inline `gh` bookkeeping only. Spawn the next only after the current settles.
 - **Parallel mode (Conflict-Minimizing Issue Selection)**:
   Identify independent issues in the queue (no unmet dependencies). To minimize cost,
@@ -207,7 +209,7 @@ An earlier subagent was interrupted. Do NOT wipe the branch or restart from scra
    sync, and tell the user what was stashed and why.
 5. Mark the issue done; if it unblocked dependents, reorder the queue.
 6. Dispatch the next subagent(s):
-   - In serial mode: spawn the next single subagent.
+   - In sequential mode: spawn the next single subagent.
    - In parallel mode: maintain up to $N$ active agents by dispatching the next available independent issue (following conflict-minimizing partitioning).
    Repeat until the queue is empty.
 

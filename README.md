@@ -96,7 +96,7 @@ run the issue loop
 process open issues AFK
 ```
 
-The agent reads `SKILL.md`, grounds the repo profile (merge policy, required CI checks, label config), asks if you prefer serial execution (1 agent, cost-minimal) or parallel execution ($N$ agents across isolated worktrees), and then works through the queue until it's empty.
+The agent reads `SKILL.md`, grounds the repo profile (merge policy, required CI checks, label config), asks if you prefer sequential execution (1 agent, cost-minimal; default) or parallel execution ($N$ agents across isolated worktrees), and then works through the queue until it's empty.
 
 You can also specify parallel execution directly:
 

@@ -13,12 +13,13 @@ Run the AFK issue loop for the current repository. Load the `afk-issue-loop` ski
 - Check install state (`node_modules` present?).
 - **Interruption / In-flight check**: Inspect `.worktrees/issue-*`, active `agent/issue-*` branches, open PRs, and recent session history. Prioritize resuming in-flight issues before pulling new ones from the queue.
 - Build the queue from `gh issue list --state open`: in-flight/interrupted issues first, then unlabeled/`needs-triage`, then `ready-for-agent` in dependency order, then skip `needs-info`/`ready-for-human` (report only).
-- **Ask user execution mode**: Unless arguments specify (`--parallel`, `--serial`, or `--concurrency <N>`), ask the user:
-  > "Do you want to run issues in serial (1 agent at a time, cost-minimal) or in parallel (specify concurrency limit, e.g. 2 or 3)?"
-  Record the selected mode (`serial` or `parallel`) and concurrency limit $N$ (default to 2 if parallel is chosen).
+- **Ask user execution mode (default sequential)**: Unless arguments specify (`--parallel`, `--serial`, `--sequential`, or `--concurrency <N>`), ask the user:
+  > "Do you want to run issues sequentially (1 agent at a time, cost-minimal; default) or in parallel (specify concurrency limit, e.g. 2 or 3)?"
+  If the user does not specify or picks default, use `sequential`. If parallel is chosen without a number, default $N$ to 2.
+  Record the selected mode (`sequential` or `parallel`) and concurrency limit $N$.
 
-## Phase 1 — Issue dispatch (serial or parallel)
-- **Serial mode**: For each queued issue in order, spawn ONE subagent (general), strictly serial, using the skill's subagent prompt template (Fresh prompt for new work, Resume prompt for interrupted issues with diff context). While it runs, do inline `gh` bookkeeping only.
+## Phase 1 — Issue dispatch (sequential or parallel)
+- **Sequential mode**: For each queued issue in order, spawn ONE subagent (general), strictly serial, using the skill's subagent prompt template (Fresh prompt for new work, Resume prompt for interrupted issues with diff context). While it runs, do inline `gh` bookkeeping only.
 - **Parallel mode (Conflict-Minimizing Issue Selection)**:
   - Select up to $N$ independent issues targeting disjoint file sets or subsystems (e.g. frontend vs backend, distinct endpoints/docs) to prevent merge conflicts and avoid costly re-runs.
   - Never concurrently dispatch issues that modify the same files or shared schemas.
@@ -34,7 +35,7 @@ Run the AFK issue loop for the current repository. Load the `afk-issue-loop` ski
 3. If an agent died mid-flight (or was interrupted):
    - Inspect the worktree and session logs; recover partial diffs and dispatch with Resume prompt instead of discarding work.
    - If the primary checkout has uncommitted changes, stash them first (`git stash push -m "..."`) and inform the user.
-4. Reorder the queue if the merge unblocked dependents; in serial mode spawn the next subagent, in parallel mode maintain up to $N$ active agents by dispatching the next independent issue (disjoint subsystem). Repeat until empty.
+4. Reorder the queue if the merge unblocked dependents; in sequential mode spawn the next subagent, in parallel mode maintain up to $N$ active agents by dispatching the next independent issue (disjoint subsystem). Repeat until empty.
 
 ## Phase 3 — Wrap-up
 - Close epics/spec parents whose decomposition tickets all merged, with a chain summary comment.
