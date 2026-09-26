@@ -86,6 +86,11 @@ Gather and hold these facts; they parameterize every subagent prompt:
   2. unlabeled (triage) and `needs-triage` issues,
   3. `ready-for-agent` issues (dependency order within families, then conflict-minimized grouping),
   4. everything else (`needs-info`, `ready-for-human` — skip; report only).
+- **Auto-identify `to-spec` and `to-tickets` issues (skip triage)**:
+  Before sending an unlabeled or `needs-triage` issue to Branch B (triage), check if it was created via `to-spec` or `to-tickets` by inspecting its issue body (`gh issue view <N> --json body`):
+  - **`to-spec` signature**: contains `## Problem Statement` AND at least one of (`## User Stories`, `## Implementation Decisions`, `## Solution`, `## Testing Decisions`).
+  - **`to-tickets` signature**: contains (`## What to build` or `**What to build:**`) AND at least one of (`## Acceptance criteria`, `## Blocked by`, `**Blocked by:**`).
+  - **Action**: If either signature matches, **skip triage completely**. The issue is agent-grabbable by construction. Label it inline (`gh issue edit <N> --add-label ready-for-agent`) and route it directly to **Branch A (implement)** respecting dependency order (`Blocked by`).
 - **Duplicates**: same title/body/author within seconds apart → close the emptier
   one as duplicate of the fuller one, inline, label `wontfix`, comment links both.
 - **Execution mode (Ask user, default sequential)**: If arguments do not specify
@@ -112,9 +117,9 @@ Depending on the chosen execution mode:
      agents branch off updated code cleanly.
   Spawn up to $N$ subagents concurrently across isolated git worktrees (e.g., `.worktrees/issue-<N>`).
 
-Branch on labels:
-- **Has `ready-for-agent`** → Branch A (implement).
-- **Unlabeled / `needs-triage`** → Branch B (triage only).
+Branch on labels / templates:
+- **Has `ready-for-agent` OR matches `to-spec` / `to-tickets` body signature** → Branch A (implement). If unlabeled, add `ready-for-agent` label inline first.
+- **Unlabeled / `needs-triage` (non-spec/ticket)** → Branch B (triage only).
 - **`needs-info`, `ready-for-human`, `wontfix`** → skip.
 
 ### Subagent prompt templates
