@@ -50,6 +50,16 @@ serial by default or parallel upon user confirmation; GitHub is the only durable
      unrecoverably corrupt.
 7. **Ephemeral baseline.** Completed subagent transcripts are discarded once settled —
    all durable state lives on GitHub (labels, comments, PRs).
+8. **Scoped worktree cleanup (never touch foreign worktrees).** The orchestrator maintains
+   an active session registry of worktrees it spawns (`.worktrees/issue-<N>`).
+   - Clean up settled worktrees in Phase 2 immediately after an issue's PR successfully merges
+     and `main` syncs: remove the worktree (`git worktree remove --force .worktrees/issue-<N>`)
+     and delete the local feature branch (`git branch -D agent/issue-<N>`).
+   - Sweep remaining settled worktrees in Phase 3 wrap-up for any issues completed in this session.
+   - **Preserve worktrees on blocked/interrupted issues**: if an issue fails or reports `blocked`,
+     retain its worktree and branch for developer inspection and resumption.
+   - **Never touch foreign worktrees**: do not remove worktrees not registered to the current session,
+     those created by other agents or users, or worktrees outside the `.worktrees/issue-<N>` pattern.
 
 ## Phase 0 — Ground the repo profile (orchestrator, inline, once per run)
 
@@ -116,6 +126,9 @@ Depending on the chosen execution mode:
   3. **Strict Sequencing**: For dependent or related issues, merge prerequisites first so subsequent
      agents branch off updated code cleanly.
   Spawn up to $N$ subagents concurrently across isolated git worktrees (e.g., `.worktrees/issue-<N>`).
+- **Session Worktree Registry**: Whenever a subagent is spawned in a git worktree (`.worktrees/issue-<N>`),
+  record the path in the active session's Worktree Registry. Only worktrees registered in this active list
+  will be torn down upon settlement, ensuring worktrees created by other agents or users are never touched.
 
 Branch on labels / templates:
 - **Has `ready-for-agent` OR matches `to-spec` / `to-tickets` body signature** → Branch A (implement). If unlabeled, add `ready-for-agent` label inline first.
@@ -212,14 +225,23 @@ An earlier subagent was interrupted. Do NOT wipe the branch or restart from scra
 4. If the user's primary checkout (`~/<repo>`) has staged/uncommitted changes, do
    not commit or discard them — `git stash push -m "<descriptive note>"` before any
    sync, and tell the user what was stashed and why.
-5. Mark the issue done; if it unblocked dependents, reorder the queue.
-6. Dispatch the next subagent(s):
+5. **Clean up settled worktree (scoped)**: If the issue was successfully merged/settled and its worktree
+   path (`.worktrees/issue-<N>`) was registered by this session:
+   - Remove the worktree: `git worktree remove --force .worktrees/issue-<N>`
+   - Delete the local branch: `git branch -D agent/issue-<N>`
+   - If the issue is `blocked` or failed, keep the worktree intact for investigation/resumption.
+   - Never touch foreign worktrees not registered by this session.
+6. Mark the issue done; if it unblocked dependents, reorder the queue.
+7. Dispatch the next subagent(s):
    - In sequential mode: spawn the next single subagent.
    - In parallel mode: maintain up to $N$ active agents by dispatching the next available independent issue (following conflict-minimizing partitioning).
    Repeat until the queue is empty.
 
 ## Phase 3 — Wrap-up
 
+- **Safety worktree sweep (scoped)**: For any remaining issues successfully completed during this session,
+  verify their `.worktrees/issue-<N>` worktrees have been removed. Prune worktree metadata:
+  `git worktree prune`. Never delete worktrees associated with blocked issues or foreign sessions/agents.
 - Epics/spec parents whose decomposition tickets all merged → close inline with a
   chain summary comment (AI disclaimer if triage-flavored).
 - Report to the user: table of issue → outcome (merged PR #, triaged label, closed,

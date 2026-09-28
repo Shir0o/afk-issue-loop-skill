@@ -14,6 +14,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - User prompt in Phase 0 to choose sequential execution (1 agent, cost-minimal; default) or parallel execution ($N$ agents across isolated worktrees)
 - Support for CLI arguments to set execution mode or concurrency limit (`--sequential`, `--serial`, `--parallel`, `--concurrency <N>`)
 - Parallel dispatch logic for independent issues with isolated worktrees and sequential orchestrator merges
+- Scoped worktree cleanup (Principle 8): actively registers worktrees spawned during the session, automatically cleans up settled worktrees (`.worktrees/issue-<N>`) and branches (`agent/issue-<N>`) in Phase 2 and sweeps in Phase 3, while preserving worktrees for blocked/interrupted issues and never touching worktrees created by other agents or users
 
 ### Added
 - Initial release of `afk-issue-loop` skill

@@ -12,6 +12,7 @@
 - **Implement** — branches off `main`, writes code TDD-style, opens a PR, watches CI, fixes failures (up to 3 cycles), then merges or hands off to the orchestrator.
 - **Orchestrate** — runs serially (1 subagent at a time) or in parallel ($N$ concurrent workers for independent issues, partitioned to prevent merge conflicts).
 - **Interruption Resilience** — resumes in-flight subagents by inspecting session history and worktree diffs rather than starting from scratch after network drops or process stops.
+- **Scoped Worktree Cleanup** — safely tears down settled worktrees and branches upon PR merge, preserving worktrees for blocked/interrupted issues and never touching worktrees created by other agents.
 
 ## How it works
 
