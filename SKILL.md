@@ -1,7 +1,7 @@
 ---
 name: afk-issue-loop
 description: "Autonomous rinse-and-repeat loop: process GitHub issues end-to-end (triage unlabeled issues, implement ready-for-agent issues, PR, watch CI, fix until green, squash-merge, sync main). Configurable serial or parallel agents, cost-minimal."
-argument: "[issue numbers or filter, e.g. --parallel or --concurrency N; default: all actionable open issues]"
+argument: "[issue numbers or filter, e.g. --parallel, --concurrency N, --serialize-gates, --concurrent-gates; default: all actionable open issues]"
 ---
 
 # AFK Issue Loop
@@ -20,6 +20,9 @@ serial by default or parallel upon user confirmation; GitHub is the only durable
      after the previous settles.
    - In parallel mode: spawn up to $N$ subagents concurrently for independent issues.
      Each subagent MUST operate in its own isolated git worktree/branch.
+   - **CPU-intensive operations & test serialization (User Choice)**: By default, enforce sequential execution of heavy operations (`flutter test`, `npm test`, test runners, builds, and code generators) across subagents to prevent CPU/memory thrashing. If running in parallel, prompt the user for their preferred heavy-operation policy:
+     - *Option 1 (Default)*: Serialize heavy gates/tests across agents (or run agents sequentially).
+     - *Option 2*: Allow fully concurrent heavy gates/tests if the host machine has sufficient capacity (e.g. `--concurrent-gates`).
 2. **Cost-minimal bookkeeping.** The orchestrator does cheap `gh` operations inline
    (closing duplicates, labels, comments, epic closure). Subagents are only for
    issue-sized work (triage analysis, implementation). Never spawn a subagent for a
@@ -103,11 +106,13 @@ Gather and hold these facts; they parameterize every subagent prompt:
   - **Action**: If either signature matches, **skip triage completely**. The issue is agent-grabbable by construction. Label it inline (`gh issue edit <N> --add-label ready-for-agent`) and route it directly to **Branch A (implement)** respecting dependency order (`Blocked by`).
 - **Duplicates**: same title/body/author within seconds apart → close the emptier
   one as duplicate of the fuller one, inline, label `wontfix`, comment links both.
-- **Execution mode (Ask user, default sequential)**: If arguments do not specify
+- **Execution mode & Gate Concurrency (Ask user, default sequential)**: If arguments do not specify
   (`--parallel`, `--serial`, `--sequential`, or `--concurrency <N>`), ask the user:
   > "Do you want to run issues sequentially (1 agent at a time, cost-minimal; default) or in parallel (specify concurrency limit, e.g. 2 or 3)?"
-  If the user does not specify a preference or chooses default, use `sequential`. If parallel is chosen without a number, default concurrency limit $N$ to 2.
-  Record the selected mode (`sequential` or `parallel`) and concurrency limit $N$.
+  If the user chooses parallel, also confirm their gate/test concurrency preference:
+  > "For heavy CPU operations (`flutter test`, `npm test`, builds), should agents serialize test runs sequentially (recommended; default) or run concurrently? (--serialize-gates vs --concurrent-gates)"
+  If the user does not specify a preference or chooses default, use `sequential`. If parallel is chosen without specifying gate behavior, default to serializing heavy gates/tests.
+  Record the selected mode (`sequential` or `parallel`), concurrency limit $N$, and gate concurrency policy (`serialized` or `concurrent`).
 
 ## Phase 1 — Issue dispatch (sequential or parallel)
 
@@ -155,6 +160,7 @@ Process GitHub issue <N> of <OWNER>/<REPO> through the AFK issue loop.
 - Respect repo docs: <AGENTS.md, CONTEXT.md, docs/adr/, docs/agents/*.md — list what exists>.
 - Required checks: <NAMES>. Merge method: <squash|merge|rebase>.
 - Full gate before push: <COMMANDS from AGENTS.md/CI, e.g. typecheck && lint && test:coverage && build>.
+- Gate concurrency policy: <serialized (default: run CPU-intensive commands and test suites sequentially without parallel test invocations) | concurrent>.
 - Branch A: branch `agent/issue-<N>` from fresh origin/main; TDD per AGENTS.md;
   PR title in the repo's conventional-commit style; body contains `Closes #<N>`;
   `gh pr checks <pr> --watch`; fix on the same branch until green (≤3 fix cycles,
@@ -198,6 +204,7 @@ An earlier subagent was interrupted. Do NOT wipe the branch or restart from scra
 - If the worktree is in an unrecoverable state (corrupt rebase or syntax deadlock), run `git reset --hard` to the last clean commit or `origin/main` as a one-time fallback, and state that in the final report.
 - Follow the standing SOP: execute skill://afk-issue-loop, Branch <A|B>, for issue <N> only.
 - Full gate before push: <COMMANDS from AGENTS.md/CI, e.g. typecheck && lint && test:coverage && build>.
+- Gate concurrency policy: <serialized (default: run CPU-intensive commands and test suites sequentially without parallel test invocations) | concurrent>.
 - Final message, exactly:
   ISSUE <N>: <merged (PR #x) | pushed (PR #x, checks green) | triaged (label) | closed (wontfix) | blocked>
   Notes: <1–3 lines>
