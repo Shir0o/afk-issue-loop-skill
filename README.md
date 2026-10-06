@@ -39,7 +39,7 @@ Orchestrator (the agent)
 
 ## Dependencies
 
-This workflow calls into four companion skill files from [Matt Pocock's engineering skill suite](https://github.com/mattpocock/skills). **All four must be available to your agent before using this workflow.**
+This workflow calls into five companion skill files from [Matt Pocock's engineering skill suite](https://github.com/mattpocock/skills). **All five must be available to your agent before using this workflow.**
 
 | Skill | What it does in this loop |
 |---|---|
@@ -47,6 +47,7 @@ This workflow calls into four companion skill files from [Matt Pocock's engineer
 | [`implement`](https://github.com/mattpocock/skills/tree/main/implement) | Branches, writes code, opens PR |
 | [`tdd`](https://github.com/mattpocock/skills/tree/main/tdd) | Red-green-refactor cycle used by the implement step |
 | [`code-review`](https://github.com/mattpocock/skills/tree/main/code-review) | Self-review before pushing PR |
+| [`pr`](https://github.com/mattpocock/skills/tree/main/skills/engineering/pr) | Standards-compliant PR description (summary diagram/diff, evidence, door & blast radius) |
 
 ## Requirements
 
@@ -59,12 +60,12 @@ This workflow calls into four companion skill files from [Matt Pocock's engineer
 
 ### 1. Install the dependency skills
 
-Download the four companion skills into wherever your agent loads workflow files from. Example using a `.agents/skills/` folder at the repo root:
+Download the five companion skills into wherever your agent loads workflow files from. Example using a `.agents/skills/` folder at the repo root:
 
 ```bash
-for skill in triage implement tdd code-review; do
+for skill in triage implement tdd code-review pr; do
   mkdir -p .agents/skills/$skill
-  curl -fsSL "https://raw.githubusercontent.com/mattpocock/skills/main/$skill/SKILL.md" \
+  curl -fsSL "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/$skill/SKILL.md" \
     -o .agents/skills/$skill/SKILL.md
 done
 ```

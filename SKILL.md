@@ -156,12 +156,13 @@ Process GitHub issue <N> of <OWNER>/<REPO> through the AFK issue loop.
   (OWN for implement; DO NOT TOUCH for triage). In parallel mode, work only in your isolated worktree.
 - Follow the standing SOP: execute skill://afk-issue-loop, Branch <A|B>, for
   issue <N> only. Skills: skill://triage (+ skill://triage/AGENT-BRIEF.md),
-  skill://implement, skill://tdd, skill://code-review — read what your branch needs.
+  skill://implement, skill://tdd, skill://code-review, skill://pr — read what your branch needs.
 - Respect repo docs: <AGENTS.md, CONTEXT.md, docs/adr/, docs/agents/*.md — list what exists>.
 - Required checks: <NAMES>. Merge method: <squash|merge|rebase>.
 - Full gate before push: <COMMANDS from AGENTS.md/CI, e.g. typecheck && lint && test:coverage && build>.
 - Gate concurrency policy: <serialized (default: run CPU-intensive commands and test suites sequentially without parallel test invocations) | concurrent>.
 - Branch A: branch `agent/issue-<N>` from fresh origin/main; TDD per AGENTS.md;
+  use skill://pr (or `/pr`) when drafting the PR body (follow the `/pr` template: Summary with visual/diff sketch, Evidence with before/after test output, Merge Danger door & blast radius);
   PR title in the repo's conventional-commit style; body contains `Closes #<N>`;
   `gh pr checks <pr> --watch`; fix on the same branch until green (≤3 fix cycles,
   then report blocked). Stop at green — do NOT merge unless the loop is in
@@ -200,9 +201,9 @@ An earlier subagent was interrupted. Do NOT wipe the branch or restart from scra
 - Work directly inside existing worktree <PATH>. Continue from the current state of files.
 - Inspect the current code and test suite before making changes.
 - If existing work is valid, build upon it: complete remaining implementation/tests, ensure the full gate passes, and push.
-- If a PR already exists, push fixes to the existing branch; do not open a duplicate PR.
+- If a PR already exists, push fixes to the existing branch; do not open a duplicate PR. If drafting a new PR, format the body using skill://pr (or `/pr`).
 - If the worktree is in an unrecoverable state (corrupt rebase or syntax deadlock), run `git reset --hard` to the last clean commit or `origin/main` as a one-time fallback, and state that in the final report.
-- Follow the standing SOP: execute skill://afk-issue-loop, Branch <A|B>, for issue <N> only.
+- Follow the standing SOP: execute skill://afk-issue-loop, Branch <A|B>, for issue <N> only. Skills: skill://triage, skill://implement, skill://tdd, skill://code-review, skill://pr.
 - Full gate before push: <COMMANDS from AGENTS.md/CI, e.g. typecheck && lint && test:coverage && build>.
 - Gate concurrency policy: <serialized (default: run CPU-intensive commands and test suites sequentially without parallel test invocations) | concurrent>.
 - Final message, exactly:

@@ -7,6 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Added
+- Integration with Matt Pocock's `/pr` skill (`skill://pr`) for writing PR bodies with summary diagrams/diffs, before/after evidence, and merge danger analysis
 - Interruption recovery & resumption: Phase 0 scans in-flight worktrees, branches, PRs, and session history
 - Targeted Resume dispatch prompt providing worktree path, uncommitted diffs, commits, and remaining tasks to avoid restarting from scratch
 - Conflict-minimizing parallel issue selection: partitions candidate issues by disjoint subsystems/files and strictly sequences dependencies to prevent merge conflicts and rebase cycles
